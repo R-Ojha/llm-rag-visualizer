@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM Foundations: Raw LLM vs RAG (Light Architecture Visualizer)</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #f8fafc;
+      --elevated: #f1f5f9;
+      --border: #e2e8f0;
+      --border-focus: #94a3b8;
+      
+      --primary: #4f46e5;
+      --primary-glow: rgba(79, 70, 229, 0.25);
+      
+      --danger: #e11d48;
+      --danger-bg: #fff1f2;
+      --danger-border: #fecdd3;
+      
+      --success: #059669;
+      --success-bg: #ecfdf5;
+      --success-border: #a7f3d0;
+      
+      --text-main: #0f172a;
+      --text-sub: #334155;
+      --muted: #64748b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text-main);
+    }
+
+    .viewport {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      padding: 10px 18px;
+      gap: 8px;
+    }
+
+    /* Top Bar */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .header-titles h1 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+      letter-spacing: -0.01em;
+    }
+    .header-titles small {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    button {
+      padding: 6px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .btn-run { 
+      background: var(--primary); 
+      color: #fff; 
+      box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3);
+    }
+    .btn-run:hover { opacity: 0.9; }
+    .btn-nav { background: var(--elevated); color: var(--text-main); border: 1px solid var(--border); }
+    .btn-nav:hover:not(:disabled) { background: #e2e8f0; }
+    .btn-nav:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-reset { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-reset:hover { background: var(--elevated); color: var(--text-main); }
+
+    /* Scenario Strip */
+    .scenario-strip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    .query-tag {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    /* Stage Progression Indicator */
+    .stage-tracker {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .stage-pill {
+      flex: 1;
+      padding: 5px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      text-align: center;
+      font-size: 10px;
+      color: var(--muted);
+      font-weight: 600;
+      transition: all 0.25s;
+    }
+    .stage-pill.active {
+      color: #fff;
+      border-color: var(--primary);
+      background: var(--primary);
+      box-shadow: 0 0 8px var(--primary-glow);
+    }
+
+    /* Dual Engines Split Area */
+    .dual-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .engine-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .engine-head {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #ffffff;
+      flex-shrink: 0;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .tag-raw { color: var(--danger); font-size: 10px; border: 1px solid var(--danger); background: var(--danger-bg); padding: 2px 6px; border-radius: 4px; }
+    .tag-rag { color: var(--success); font-size: 10px; border: 1px solid var(--success); background: var(--success-bg); padding: 2px 6px; border-radius: 4px; }
+
+    .engine-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 8px;
+      gap: 6px;
+      overflow: hidden;
+    }
+
+    /* Modular Cards Inside Engine */
+    .module-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      transition: all 0.2s ease;
+    }
+    .module-card.active-module {
+      border-color: var(--primary);
+      background: #fafafa;
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+    .module-title {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      display: flex;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    /* Stage 1 & 2 Modules */
+    .doc-banner {
+      font-size: 10px;
+      padding: 4px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .doc-none { background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger); font-weight: 500; }
+    .doc-injected { background: var(--success-bg); border: 1px solid var(--success-border); color: var(--success); font-weight: 500; }
+
+    .vector-pill-box {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      font-size: 9px;
+      font-family: monospace;
+    }
+    .vec-tag {
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      padding: 2px 5px;
+      border-radius: 3px;
+      color: var(--text-sub);
+    }
+    .vec-tag.highlight-vec {
+      border-color: var(--primary);
+      background: #ede9fe;
+      color: var(--primary);
+      font-weight: bold;
+    }
+
+    /* Stage 3: Self-Attention Matrix */
+    .matrix-card {
+      flex: 2.1;
+      min-height: 120px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .matrix-box {
+      flex: 1;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: #ffffff;
+    }
+    table.compact-matrix {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9px;
+      font-family: monospace;
+      text-align: center;
+    }
+    table.compact-matrix th, table.compact-matrix td {
+      padding: 4px 5px;
+      border: 1px solid var(--border);
+    }
+    table.compact-matrix th { background: var(--elevated); color: var(--text-sub); position: sticky; top: 0; }
+    td.active-lock {
+      background: var(--success-bg) !important;
+      color: var(--success);
+      font-weight: bold;
+      border: 1px solid var(--success-border) !important;
+    }
+    td.raw-blur {
+      background: var(--danger-bg) !important;
+      color: var(--danger);
+      font-weight: bold;
+    }
+
+    /* Stage 4: Softmax Candidates */
+    .prob-card {
+      flex: 1.8;
+      min-height: 100px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .prob-box {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding-top: 2px;
+    }
+    .cand-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 10px;
+      font-family: monospace;
+    }
+    .cand-name { width: 95px; font-weight: 500; }
+    .cand-track {
+      flex: 1;
+      height: 6px;
+      background: var(--elevated);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .cand-fill-raw {
+      height: 100%;
+      background: var(--danger);
+      transition: width 0.3s ease;
+    }
+    .cand-fill-rag {
+      height: 100%;
+      background: var(--success);
+      transition: width 0.3s ease;
+    }
+
+    /* Stage 5: Autoregressive Streaming Buffer */
+    .stream-card {
+      height: 68px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .stream-box {
+      flex: 1;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-content: flex-start;
+      overflow-y: auto;
+    }
+    .tok-badge {
+      font-size: 10px;
+      font-family: monospace;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      animation: popIn 0.2s ease;
+    }
+    .tok-raw-hallucinated { border-color: var(--danger-border); background: var(--danger-bg); color: var(--danger); }
+    .tok-rag-grounded { border-color: var(--success-border); background: var(--success-bg); color: var(--success); }
+    .tok-latest { transform: scale(1.05); font-weight: bold; border-width: 1.5px; }
+
+    @keyframes popIn {
+      from { transform: scale(0.9); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="viewport">
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <div class="header-titles">
+      <h1>Raw LLM vs RAG: Live 5-Stage Autoregressive Telemetry</h1>
+      <small>Step Sequence: 1. Context ➔ 2. Vector Embed ➔ 3. Attention (N×N) ➔ 4. Softmax ➔ 5. Loop Buffer</small>
+    </div>
+    <div class="controls">
+      <button class="btn-nav" id="prevBtn" onclick="prevAutoregressiveCycle()" disabled>
+        ⮌ Previous Step
+      </button>
+      <button class="btn-nav" id="nextBtn" onclick="stepAutoregressiveCycle()">
+        Next Step ➔
+      </button>
+      <button class="btn-run" id="playBtn" onclick="togglePlay()">
+        <span id="playIcon">▶</span> Auto Stream
+      </button>
+      <button class="btn-reset" onclick="resetAll()">Reset</button>
+    </div>
+  </div>
+
+  <!-- Scenario Strip -->
+  <div class="scenario-strip">
+    <div>
+      <span style="color:var(--muted)">Target Query:</span>
+      <span class="query-tag">"What is the invoice retry policy for 404 payload failure in ERP?"</span>
+    </div>
+    <div style="color:var(--muted)">
+      Cycle: <b id="cycleCounter" style="color:var(--text-main);">0</b> | Active Stage: <b id="activeStageName" style="color:var(--primary);">Idle</b>
+    </div>
+  </div>
+
+  <!-- 5-Stage Step Tracker Indicator -->
+  <div class="stage-tracker">
+    <div class="stage-pill" id="st1">1. Context & BPE</div>
+    <div class="stage-pill" id="st2">2. Vector Embed (4096-D)</div>
+    <div class="stage-pill" id="st3">3. Attention Matrix (N×N)</div>
+    <div class="stage-pill" id="st4">4. Softmax Sampling</div>
+    <div class="stage-pill" id="st5">5. Autoregressive Loop</div>
+  </div>
+
+  <!-- Dual Split Grid -->
+  <div class="dual-split">
+    <!-- LEFT PANEL: RAW LLM -->
+    <div class="engine-panel">
+      <div class="engine-head">
+        <span>1. RAW FOUNDATION LLM</span>
+        <span class="tag-raw">Generic Weights (Hallucination Risk)</span>
+      </div>
+
+      <div class="engine-content">
+        <!-- Stage 1: Context -->
+        <div class="module-card" id="rawCard1">
+          <div class="module-title">
+            <span>1. Context Ingestion & BPE</span>
+            <span style="color:var(--danger)">No Document Retrieved</span>
+          </div>
+          <div class="doc-banner doc-none">
+            [Vector DB: Bypassed] Direct Prompt Only: "What is invoice retry for 404..."
+          </div>
+        </div>
+
+        <!-- Stage 2: Embeddings -->
+        <div class="module-card" id="rawCard2">
+          <div class="module-title">
+            <span>2. Vector Embeddings (4096-D)</span>
+            <span style="color:var(--muted)">Static Coordinates</span>
+          </div>
+          <div class="vector-pill-box" id="rawVectorBox"></div>
+        </div>
+
+        <!-- Stage 3: Attention Matrix -->
+        <div class="module-card matrix-card" id="rawCard3">
+          <div class="module-title">
+            <span>3. Self-Attention Map (Generic Bias)</span>
+            <span id="rawAttnSize">3 × 3</span>
+          </div>
+          <div class="matrix-box">
+            <table class="compact-matrix" id="rawMatrix"></table>
+          </div>
+        </div>
+
+        <!-- Stage 4: Softmax Candidates -->
+        <div class="module-card prob-card" id="rawCard4">
+          <div class="module-title">
+            <span>4. Softmax Probabilities (Flat / Guessing)</span>
+            <span style="color:var(--danger)">Temp: 0.7</span>
+          </div>
+          <div class="prob-box" id="rawCandidates"></div>
+        </div>
+
+        <!-- Stage 5: Autoregressive Streaming Buffer -->
+        <div class="module-card stream-card" id="rawCard5">
+          <div class="module-title">
+            <span>5. Autoregressive Output Stream</span>
+            <span style="color:var(--danger)">Vague Answer</span>
+          </div>
+          <div class="stream-box" id="rawStream"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: RAG PIPELINE -->
+    <div class="engine-panel">
+      <div class="engine-head">
+        <span>2. ENTERPRISE RAG AUGMENTED LLM</span>
+        <span class="tag-rag">Document Injected (Deterministic)</span>
+      </div>
+
+      <div class="engine-content">
+        <!-- Stage 1: Context -->
+        <div class="module-card" id="ragCard1">
+          <div class="module-title">
+            <span>1. Context Ingestion & BPE</span>
+            <span style="color:var(--success)">Cosine Similarity: 0.94</span>
+          </div>
+          <div class="doc-banner doc-injected">
+            [Vector DB: SOP_INV_v2.pdf] "...On 404 missing ledger: queue in 'retry_q'..."
+          </div>
+        </div>
+
+        <!-- Stage 2: Embeddings -->
+        <div class="module-card" id="ragCard2">
+          <div class="module-title">
+            <span>2. Vector Embeddings (4096-D)</span>
+            <span style="color:var(--success)">Grounded In Space</span>
+          </div>
+          <div class="vector-pill-box" id="ragVectorBox"></div>
+        </div>
+
+        <!-- Stage 3: Attention Matrix -->
+        <div class="module-card matrix-card" id="ragCard3">
+          <div class="module-title">
+            <span>3. Self-Attention Map (Cross-Lock on SOP)</span>
+            <span id="ragAttnSize">3 × 3</span>
+          </div>
+          <div class="matrix-box">
+            <table class="compact-matrix" id="ragMatrix"></table>
+          </div>
+        </div>
+
+        <!-- Stage 4: Softmax Candidates -->
+        <div class="module-card prob-card" id="ragCard4">
+          <div class="module-title">
+            <span>4. Softmax Probabilities (Sharp Peak on SOP)</span>
+            <span style="color:var(--success)">Top-P: 0.90</span>
+          </div>
+          <div class="prob-box" id="ragCandidates"></div>
+        </div>
+
+        <!-- Stage 5: Autoregressive Streaming Buffer -->
+        <div class="module-card stream-card" id="ragCard5">
+          <div class="module-title">
+            <span>5. Autoregressive Output Stream</span>
+            <span style="color:var(--success)">Grounded Answer</span>
+          </div>
+          <div class="stream-box" id="ragStream"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const streamSteps = [
+    {
+      rawWord: "Generally,",
+      rawCandidates: [
+        { word: "Generally,", prob: 36.4 },
+        { word: "Normally,", prob: 28.1 },
+        { word: "Usually,", prob: 18.2 },
+        { word: "404", prob: 17.3 }
+      ],
+      ragWord: "As",
+      ragCandidates: [
+        { word: "As", prob: 78.4 },
+        { word: "According", prob: 14.1 },
+        { word: "Per", prob: 5.2 },
+        { word: "In", prob: 2.3 }
+      ]
+    },
+    {
+      rawWord: "HTTP_404",
+      rawCandidates: [
+        { word: "HTTP_404", prob: 41.2 },
+        { word: "invoices", prob: 24.5 },
+        { word: "error", prob: 20.1 },
+        { word: "servers", prob: 14.2 }
+      ],
+      ragWord: "per",
+      ragCandidates: [
+        { word: "per", prob: 88.6 },
+        { word: "the", prob: 6.2 },
+        { word: "our", prob: 3.1 },
+        { word: "standard", prob: 2.1 }
+      ]
+    },
+    {
+      rawWord: "means_not_found.",
+      rawCandidates: [
+        { word: "means_not_found.", prob: 48.0 },
+        { word: "indicates_failure.", prob: 22.3 },
+        { word: "cannot_sync.", prob: 18.5 },
+        { word: "retries_vary.", prob: 11.2 }
+      ],
+      ragWord: "SOP_v2,",
+      ragCandidates: [
+        { word: "SOP_v2,", prob: 91.5 },
+        { word: "policy,", prob: 4.8 },
+        { word: "runbook,", prob: 2.3 },
+        { word: "doc,", prob: 1.4 }
+      ]
+    },
+    {
+      rawWord: "Contact",
+      rawCandidates: [
+        { word: "Contact", prob: 38.5 },
+        { word: "Please", prob: 27.2 },
+        { word: "Check", prob: 21.1 },
+        { word: "Wait", prob: 13.2 }
+      ],
+      ragWord: "route",
+      ragCandidates: [
+        { word: "route", prob: 86.4 },
+        { word: "queue", prob: 7.9 },
+        { word: "send", prob: 3.5 },
+        { word: "dispatch", prob: 2.2 }
+      ]
+    },
+    {
+      rawWord: "your_admin.",
+      rawCandidates: [
+        { word: "your_admin.", prob: 52.1 },
+        { word: "IT_support.", prob: 26.4 },
+        { word: "ERP_team.", prob: 14.2 },
+        { word: "developer.", prob: 7.3 }
+      ],
+      ragWord: "to_retry_q",
+      ragCandidates: [
+        { word: "to_retry_q", prob: 94.2 },
+        { word: "to_dead_letter", prob: 3.1 },
+        { word: "immediately", prob: 1.8 },
+        { word: "backoff", prob: 0.9 }
+      ]
+    },
+    {
+      rawWord: "[No_SOP_Rule]",
+      rawCandidates: [
+        { word: "[No_SOP_Rule]", prob: 60.0 },
+        { word: "or_retrigger.", prob: 22.0 },
+        { word: "later.", prob: 12.0 },
+        { word: "manually.", prob: 6.0 }
+      ],
+      ragWord: "(3_backoffs).",
+      ragCandidates: [
+        { word: "(3_backoffs).", prob: 96.5 },
+        { word: "with_backoff.", prob: 2.1 },
+        { word: "3_times.", prob: 0.9 },
+        { word: "and_escalate.", prob: 0.5 }
+      ]
+    }
+  ];
+
+  let rawTokens = ["Invoice", "404", "ERP"];
+  let ragTokens = ["SOP_doc", "Invoice", "ERP"];
+  let currentStep = 0;
+  let isPlaying = false;
+  let autoTimer = null;
+
+  let isAnimating = false;
+  let activeTimeouts = [];
+
+  function safeTimeout(fn, delay) {
+    const id = setTimeout(fn, delay);
+    activeTimeouts.push(id);
+    return id;
+  }
+
+  function clearAllTimeouts() {
+    activeTimeouts.forEach(id => clearTimeout(id));
+    activeTimeouts = [];
+    isAnimating = false;
+  }
+
+  function renderVectors(containerId, tokens, latestWord) {
+    const box = document.getElementById(containerId);
+    box.innerHTML = "";
+    tokens.forEach((t, i) => {
+      const tag = document.createElement("span");
+      const isLatest = (t === latestWord);
+      tag.className = `vec-tag ${isLatest ? 'highlight-vec' : ''}`;
+      const d1 = (Math.sin(i * 3 + 1) * 0.7).toFixed(2);
+      const d2 = (Math.cos(i * 3 + 1) * 0.7).toFixed(2);
+      tag.textContent = `${t} [${d1}, ${d2}...]`;
+      box.appendChild(tag);
+    });
+  }
+
+  function renderMatrix(tableId, tokens, isRag) {
+    const table = document.getElementById(tableId);
+    table.innerHTML = "";
+    const trH = document.createElement("tr");
+    trH.innerHTML = "<th></th>" + tokens.map(t => `<th title="${t}">${t.length > 5 ? t.slice(0, 4) + '…' : t}</th>`).join("");
+    table.appendChild(trH);
+
+    tokens.forEach((r, ri) => {
+      const tr = document.createElement("tr");
+      let html = `<th title="${r}">${r.length > 5 ? r.slice(0, 4) + '…' : r}</th>`;
+      
+      const rowLogits = tokens.map((c, ci) => {
+        let logit = Math.abs(Math.sin((ri + 1) * 3 + (ci + 1) * 7)) * 2.0;
+        if (ri === ci) logit += 3.0;
+        if (isRag && ((r.includes("SOP") || c.includes("SOP")) && (r.includes("retry") || c.includes("retry") || r.includes("ERP") || c.includes("ERP")))) {
+          logit += 4.5;
+        }
+        return logit;
+      });
+
+      // Numerically stable Softmax (subtract max logit to prevent float overflow)
+      const maxLogit = Math.max(...rowLogits);
+      const expVals = rowLogits.map(l => Math.exp(l - maxLogit));
+      const expSum = expVals.reduce((acc, v) => acc + v, 0);
+      const rowProbs = expVals.map(v => v / expSum);
+
+      tokens.forEach((c, ci) => {
+        const val = rowProbs[ci].toFixed(2);
+        let isLock = isRag && parseFloat(val) >= 0.35 && (r.includes("SOP") || c.includes("SOP"));
+        let isBlur = !isRag && (r.includes("admin") || c.includes("admin"));
+        const cellClass = isLock ? 'active-lock' : (isBlur ? 'raw-blur' : '');
+        html += `<td class="${cellClass}">${val}</td>`;
+      });
+
+      tr.innerHTML = html;
+      table.appendChild(tr);
+    });
+  }
+
+  function renderCandidates(containerId, cList, isRag) {
+    const box = document.getElementById(containerId);
+    box.innerHTML = "";
+    cList.forEach((c, i) => {
+      const row = document.createElement("div");
+      row.className = "cand-row";
+      row.innerHTML = `
+        <span class="cand-name" style="${i === 0 ? 'font-weight:bold;' : 'color:var(--muted);'}">
+          ${i === 0 ? '↳ ' : ''}${c.word}
+        </span>
+        <div class="cand-track">
+          <div class="${isRag ? 'cand-fill-rag' : 'cand-fill-raw'}" style="width:${c.prob}%;"></div>
+        </div>
+        <span style="width:32px; text-align:right;">${c.prob}%</span>
+      `;
+      box.appendChild(row);
+    });
+  }
+
+  function renderStreams(latestRaw = null, latestRag = null) {
+    const rawBox = document.getElementById("rawStream");
+    rawBox.innerHTML = "";
+    rawTokens.forEach(t => {
+      const b = document.createElement("span");
+      b.className = `tok-badge tok-raw-hallucinated ${t === latestRaw ? 'tok-latest' : ''}`;
+      b.textContent = t;
+      rawBox.appendChild(b);
+    });
+    rawBox.scrollTop = rawBox.scrollHeight; // Auto-scroll downward
+
+    const ragBox = document.getElementById("ragStream");
+    ragBox.innerHTML = "";
+    ragTokens.forEach(t => {
+      const b = document.createElement("span");
+      b.className = `tok-badge tok-rag-grounded ${t === latestRag ? 'tok-latest' : ''}`;
+      b.textContent = t;
+      ragBox.appendChild(b);
+    });
+    ragBox.scrollTop = ragBox.scrollHeight; // Auto-scroll downward
+  }
+
+  function renderAll(activeStageNum = 0, latestRaw = null, latestRag = null) {
+    document.getElementById("cycleCounter").textContent = currentStep;
+
+    document.getElementById("prevBtn").disabled = (currentStep === 0 || isAnimating);
+    document.getElementById("nextBtn").disabled = (currentStep >= streamSteps.length || isAnimating);
+
+    for (let i = 1; i <= 5; i++) {
+      const pill = document.getElementById(`st${i}`);
+      pill.classList.toggle("active", i === activeStageNum);
+    }
+    const stageNames = ["Idle", "1. Context & BPE", "2. Vector Embed (4096-D)", "3. Attention Matrix (N×N)", "4. Softmax Sampling", "5. Autoregressive Loop"];
+    document.getElementById("activeStageName").textContent = stageNames[activeStageNum] || "Running";
+
+    for (let s = 1; s <= 5; s++) {
+      document.getElementById(`rawCard${s}`).classList.toggle("active-module", activeStageNum === s);
+      document.getElementById(`ragCard${s}`).classList.toggle("active-module", activeStageNum === s);
+    }
+
+    renderVectors("rawVectorBox", rawTokens, latestRaw);
+    renderVectors("ragVectorBox", ragTokens, latestRag);
+
+    document.getElementById("rawAttnSize").textContent = `${rawTokens.length} × ${rawTokens.length}`;
+    document.getElementById("ragAttnSize").textContent = `${ragTokens.length} × ${ragTokens.length}`;
+    renderMatrix("rawMatrix", rawTokens, false);
+    renderMatrix("ragMatrix", ragTokens, true);
+
+    if (currentStep < streamSteps.length) {
+      const cur = streamSteps[currentStep];
+      renderCandidates("rawCandidates", cur.rawCandidates, false);
+      renderCandidates("ragCandidates", cur.ragCandidates, true);
+    } else {
+      document.getElementById("rawCandidates").innerHTML = "<small style='color:var(--danger);'>Stream Complete (Vague General Guess)</small>";
+      document.getElementById("ragCandidates").innerHTML = "<small style='color:var(--success);'>Stream Complete (Strict SOP Compliance)</small>";
+    }
+
+    renderStreams(latestRaw, latestRag);
+  }
+
+  function stepAutoregressiveCycle() {
+    if (isAnimating || currentStep >= streamSteps.length) return;
+    isAnimating = true;
+    renderAll(0);
+
+    const stepObj = streamSteps[currentStep];
+
+    renderAll(1);
+
+    safeTimeout(() => {
+      renderAll(2);
+
+      safeTimeout(() => {
+        renderAll(3);
+
+        safeTimeout(() => {
+          renderAll(4);
+
+          safeTimeout(() => {
+            // Phase 5: Token Append to Autoregressive Buffer
+            rawTokens.push(stepObj.rawWord);
+            ragTokens.push(stepObj.ragWord);
+            renderAll(5, stepObj.rawWord, stepObj.ragWord); // Pehle current step ke candidate bars highlight hone dein
+            currentStep++; // Ab increment karein
+
+            safeTimeout(() => {
+              isAnimating = false;
+              renderAll(0);
+            }, 200);
+          }, 240);
+        }, 240);
+      }, 240);
+    }, 240);
+  }
+
+  function prevAutoregressiveCycle() {
+    if (isPlaying) togglePlay();
+    clearAllTimeouts();
+
+    if (currentStep <= 0) return;
+
+    rawTokens.pop();
+    ragTokens.pop();
+    currentStep--;
+
+    const prevRaw = currentStep > 0 ? streamSteps[currentStep - 1].rawWord : null;
+    const prevRag = currentStep > 0 ? streamSteps[currentStep - 1].ragWord : null;
+    renderAll(0, prevRaw, prevRag);
+  }
+
+  function togglePlay() {
+    isPlaying = !isPlaying;
+    const btn = document.getElementById("playBtn");
+    const icon = document.getElementById("playIcon");
+
+    if (isPlaying) {
+      icon.textContent = "❚❚";
+      btn.style.background = "#dc2626";
+      autoTimer = setInterval(() => {
+        if (!isAnimating && currentStep < streamSteps.length) {
+          stepAutoregressiveCycle();
+        } else if (currentStep >= streamSteps.length) {
+          togglePlay();
+        }
+      }, 1600);
+    } else {
+      icon.textContent = "▶";
+      btn.style.background = "var(--primary)";
+      clearInterval(autoTimer);
+      autoTimer = null; // Clean state reset
+      clearAllTimeouts();
+    }
+  }
+
+  function resetAll() {
+    if (isPlaying) togglePlay();
+    clearAllTimeouts();
+    rawTokens = ["Invoice", "404", "ERP"];
+    ragTokens = ["SOP_doc", "Invoice", "ERP"];
+    currentStep = 0;
+    renderAll(0);
+  }
+
+  window.onload = () => renderAll(0);
+</script>
+</body>
+</html>
